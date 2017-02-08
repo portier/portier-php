@@ -65,7 +65,7 @@ abstract class AbstractStore implements StoreInterface
         if ($res->hasHeader('Cache-Control')) {
             if (preg_match(
                 '/max-age\s*=\s*(\d+)/',
-                $res->getHeader('Cache-Control'),
+                $res->getHeaderLine('Cache-Control'),
                 $matches
             )) {
                 $ttl = intval($matches[1]);
