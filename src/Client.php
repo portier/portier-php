@@ -137,9 +137,11 @@ class Client
         $seq->addChild(new \FG\ASN1\Universal\Integer(gmp_strval($e)));
         $pkey = new \FG\X509\PublicKey(bin2hex($seq->getBinary()));
 
+        $encoded = base64_encode($pkey->getBinary());
+
         return new \Lcobucci\JWT\Signer\Key(
             "-----BEGIN PUBLIC KEY-----\n" .
-            base64_encode($pkey->getBinary()) . "\n" .
+            chunk_split($encoded, 64, "\n") .
             "-----END PUBLIC KEY-----\n"
         );
     }
