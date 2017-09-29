@@ -6,9 +6,13 @@ php:
   - 7.1
   - 7.2
 
+before_install:
+  - echo 'extension = redis.so' >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
+
 before_script:
   - composer install -n
 
 script:
   - ./vendor/bin/phpcs --standard=psr2 . --ignore=/vendor/
+  - ./vendor/bin/phpstan analyse --level max src/
   - ./vendor/bin/phpunit
