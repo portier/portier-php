@@ -16,7 +16,7 @@
     },
     "require": {
         "spomky-labs/base64url": "^1.0",
-        "fgrosse/phpasn1": "^1.5",
+        "fgrosse/phpasn1": "^2.0",
         "lcobucci/jwt": "^3.2",
         "guzzlehttp/guzzle": "^6.2"
     },
