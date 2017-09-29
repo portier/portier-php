@@ -31,10 +31,10 @@ class Client
 
     /**
      * Constructor
-     * @param Store  $store        Store implementation to use.
-     * @param string $redirectUri  URL that Portier will redirect to.
+     * @param StoreInterface  $store        Store implementation to use.
+     * @param string          $redirectUri  URL that Portier will redirect to.
      */
-    public function __construct($store, $redirectUri)
+    public function __construct(StoreInterface $store, string $redirectUri)
     {
         $this->store = $store;
         $this->redirectUri = $redirectUri;
@@ -47,7 +47,7 @@ class Client
      * @param  string $email  Email address to authenticate.
      * @return string         URL to redirect the browser to.
      */
-    public function authenticate($email)
+    public function authenticate(string $email): string
     {
         $nonce = $this->store->createNonce($email);
         $query = http_build_query([
@@ -67,7 +67,7 @@ class Client
      * @param  string $token  The received `id_token` parameter value.
      * @return string         The verified email address.
      */
-    public function verify($token)
+    public function verify(string $token): string
     {
         // Parse token and get the key ID from its header.
         $parser = new \Lcobucci\JWT\Parser();
@@ -123,11 +123,9 @@ class Client
     }
 
     /**
-     * Parse a JWK into an OpenSSL public key.
-     * @param  object   $jwk
-     * @return resource
+     * Parse a JWK into a PEM public key.
      */
-    private static function parseJwk($jwk)
+    private static function parseJwk($jwk): string
     {
         $n = gmp_init(bin2hex(\Base64Url\Base64Url::decode($jwk->n)), 16);
         $e = gmp_init(bin2hex(\Base64Url\Base64Url::decode($jwk->e)), 16);
@@ -139,19 +137,16 @@ class Client
 
         $encoded = base64_encode($pkey->getBinary());
 
-        return new \Lcobucci\JWT\Signer\Key(
+        return
             "-----BEGIN PUBLIC KEY-----\n" .
             chunk_split($encoded, 64, "\n") .
-            "-----END PUBLIC KEY-----\n"
-        );
+            "-----END PUBLIC KEY-----\n";
     }
 
     /**
      * Get the origin for a URL
-     * @param  string $url
-     * @return string
      */
-    private static function getOrigin($url)
+    private static function getOrigin(string $url): string
     {
         $components = parse_url($url);
         if ($components === false) {

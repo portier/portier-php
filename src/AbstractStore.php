@@ -42,7 +42,7 @@ abstract class AbstractStore implements StoreInterface
      * @param  string $email  Optional email context
      * @return string         The generated nonce.
      */
-    public function generateNonce($email)
+    public function generateNonce(string $email): string
     {
         return bin2hex(random_bytes(16));
     }
@@ -52,7 +52,7 @@ abstract class AbstractStore implements StoreInterface
      * @param  string $url  The URL to fetch.
      * @return object       An object with `ttl` and `data` properties.
      */
-    public function fetch($url)
+    public function fetch(string $url)
     {
         $res = $this->guzzle->get($url);
 

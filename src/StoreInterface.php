@@ -13,19 +13,19 @@ interface StoreInterface
      * @param  string $url      The URL to fetch of the ID is not available.
      * @return object           The JSON object from the response body.
      */
-    public function fetchCached($cacheId, $url);
+    public function fetchCached(string $cacheId, string $url);
 
     /**
      * Generate and store a nonce.
      * @param  string $email  Email address to associate with the nonce.
      * @return string         The generated nonce.
      */
-    public function createNonce($email);
+    public function createNonce(string $email): string;
 
     /**
      * Consume a nonce, and check if it's valid for the given email address.
      * @param string $nonce  The nonce to resolve.
      * @param string $email  The email address that is being verified.
      */
-    public function consumeNonce($nonce, $email);
+    public function consumeNonce(string $nonce, string $email);
 }
