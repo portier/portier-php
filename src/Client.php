@@ -43,6 +43,29 @@ class Client
     }
 
     /**
+     * Normalize one or more email addresses.
+     *
+     * This method is useful when comparing user input to an email address
+     * returned in a Portier token. It is not necessary to call this before
+     * `authenticate`, normalization is already part of the authentication
+     * process.
+     *
+     * This is currently implemented by making an HTTP call to Portier, without
+     * cache.
+     *
+     * @param  string[] $emails Email addresses to normalize.
+     * @return string[]         Normalized email addresses, empty strings for invalid.
+     */
+    public function normalize(array $emails): array
+    {
+        $res = $this->store->guzzle->post(
+            $this->broker . '/normalize',
+            ['body' => implode("\n", $emails)]
+        );
+        return explode("\n", (string) $res->getBody());
+    }
+
+    /**
      * Start authentication of an email address.
      * @param  string $email  Email address to authenticate.
      * @return string         URL to redirect the browser to.
