@@ -49,8 +49,8 @@ abstract class AbstractStore implements StoreInterface
 
     /**
      * Fetch a URL using HTTP GET.
-     * @param  string $url  The URL to fetch.
-     * @return object       An object with `ttl` and `data` properties.
+     * @param  string    $url  The URL to fetch.
+     * @return \stdClass       An object with `ttl` and `data` properties.
      */
     public function fetch(string $url)
     {
