@@ -2,16 +2,49 @@
 
 namespace Tests;
 
+use \Portier\Client;
+
 class ClientTest extends \PHPUnit\Framework\TestCase
 {
+    public function testLocalNormalize()
+    {
+        if (!Client\Client::hasNormalizeLocal()) {
+            return;
+        }
+
+        $valid = [
+          ['example.foo+bar@example.com', 'example.foo+bar@example.com'],
+          ['EXAMPLE.FOO+BAR@EXAMPLE.COM', 'example.foo+bar@example.com'],
+          // Simple case transformation
+          ['BJÖRN@göteborg.test', 'björn@xn--gteborg-90a.test'],
+          // Special case transformation
+          ['İⅢ@İⅢ.example', 'i̇ⅲ@xn--iiii-qwc.example'],
+        ];
+        foreach ($valid as $pair) {
+            list($i, $o) = $pair;
+            $this->assertEquals(Client\Client::normalizeLocal($i), $o);
+        }
+
+        $invalid = [
+          'foo',
+          'foo@',
+          '@foo.example',
+          'foo@127.0.0.1',
+          'foo@[::1]',
+        ];
+        foreach ($invalid as $i) {
+            $this->assertEquals(Client\Client::normalizeLocal($i), '');
+        }
+    }
+
     public function testAuthenticate()
     {
-        $store = $this->prophesize(\Portier\Client\StoreInterface::class);
+        $store = $this->prophesize(Client\StoreInterface::class);
         $store->createNonce('johndoe@example.com')
             ->willReturn('foobar')
             ->shouldBeCalled();
 
-        $client = new \Portier\Client\Client(
+        $client = new Client\Client(
             $store->reveal(),
             'https://example.com/callback'
         );
