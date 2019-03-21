@@ -86,7 +86,8 @@ class Client
      */
     public static function normalizeLocal(string $email): string
     {
-        assert(self::hasNormalizeLocal());
+        // Repeat these checks here, so PHPStan understands.
+        assert(defined('MB_CASE_FOLD') && function_exists('idn_to_ascii'));
 
         $localEnd = strrpos($email, '@');
         if ($localEnd === false) {
