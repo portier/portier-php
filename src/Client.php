@@ -11,7 +11,9 @@ class Client
      * Default Portier broker origin.
      * @var string
      */
-    const DEFAULT_BROKER = 'https://broker.portier.io';
+    public const DEFAULT_BROKER = 'https://broker.portier.io';
+
+    private const REQUIRED_CLAIMS = ['iss', 'aud', 'exp', 'iat', 'email', 'nonce'];
 
     private $store;
     private $redirectUri;
@@ -129,6 +131,14 @@ class Client
             throw new \Exception('Token signature did not validate');
         }
 
+        // Check that the required token claims are set.
+        $missing = array_filter(self::REQUIRED_CLAIMS, function (string $name) use ($token) {
+            return !$token->hasClaim($name);
+        });
+        if (!empty($missing)) {
+            throw new \Exception(sprintf('Token is missing claims: %s', implode(', ', $missing)));
+        }
+
         // Validate the token claims.
         $vdata = new \Lcobucci\JWT\ValidationData();
         $vdata->setIssuer($this->broker);
@@ -137,11 +147,13 @@ class Client
             throw new \Exception('Token claims did not validate');
         }
 
-        // Get the email and consume the nonce.
+        // Consume the nonce.
         $nonce = $token->getClaim('nonce');
-        $email = $token->getClaim('sub');
-        $this->store->consumeNonce($nonce, $email);
+        $email = $token->getClaim('email');
+        $emailOriginal = $token->getClaim('email_original', $email);
+        $this->store->consumeNonce($nonce, $emailOriginal);
 
+        // Return the normalized email.
         return $email;
     }
 
