@@ -53,8 +53,8 @@ class Client
      * process.
      *
      * For PHP 7.3 with the intl extension, this function can process the email
-     * list locally. Otherwise, note that function makes an HTTP call to the
-     * Portier broker, without result caching.
+     * list locally. Otherwise, note that this function makes an HTTP call to
+     * the Portier broker, without result caching.
      *
      * Use `hasNormalizeLocal` to check if local normalization is available at
      * run-time, or directly use `normalizeLocal` to force-or-fail local
