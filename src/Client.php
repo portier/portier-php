@@ -11,7 +11,9 @@ class Client
      * Default Portier broker origin.
      * @var string
      */
-    const DEFAULT_BROKER = 'https://broker.portier.io';
+    public const DEFAULT_BROKER = 'https://broker.portier.io';
+
+    private const REQUIRED_CLAIMS = ['iss', 'aud', 'exp', 'iat', 'email', 'nonce'];
 
     private $store;
     private $redirectUri;
@@ -50,19 +52,79 @@ class Client
      * `authenticate`, normalization is already part of the authentication
      * process.
      *
-     * This is currently implemented by making an HTTP call to Portier, without
-     * cache.
+     * For PHP 7.3 with the intl extension, this function can process the email
+     * list locally. Otherwise, note that this function makes an HTTP call to
+     * the Portier broker, without result caching.
+     *
+     * Use `hasNormalizeLocal` to check if local normalization is available at
+     * run-time, or directly use `normalizeLocal` to force-or-fail local
+     * normalization.
      *
      * @param  string[] $emails Email addresses to normalize.
      * @return string[]         Normalized email addresses, empty strings for invalid.
      */
     public function normalize(array $emails): array
     {
-        $res = $this->store->guzzle->post(
-            $this->broker . '/normalize',
-            ['body' => implode("\n", $emails)]
+        if (self::hasNormalizeLocal()) {
+            return array_map([self::class, 'normalizeLocal'], $emails);
+        } else {
+            $res = $this->store->guzzle->post(
+                $this->broker . '/normalize',
+                ['body' => implode("\n", $emails)]
+            );
+            return explode("\n", (string) $res->getBody());
+        }
+    }
+
+    /**
+     * Normalize an email address. (Pure-PHP version)
+     *
+     * This method is useful when comparing user input to an email address
+     * returned in a Portier token. It is not necessary to call this before
+     * `authenticate`, normalization is already part of the authentication
+     * process.
+     *
+     * This function requires PHP 7.3 with the intl extension.
+     */
+    public static function normalizeLocal(string $email): string
+    {
+        // Repeat these checks here, so PHPStan understands.
+        assert(defined('MB_CASE_FOLD') && function_exists('idn_to_ascii'));
+
+        $localEnd = strrpos($email, '@');
+        if ($localEnd === false) {
+            return '';
+        }
+
+        $local = mb_convert_case(
+            substr($email, 0, $localEnd),
+            MB_CASE_FOLD
         );
-        return explode("\n", (string) $res->getBody());
+        if (empty($local)) {
+            return '';
+        }
+
+        $host = idn_to_ascii(
+            substr($email, $localEnd + 1),
+            IDNA_USE_STD3_RULES | IDNA_CHECK_BIDI,
+            INTL_IDNA_VARIANT_UTS46
+        );
+        if (empty($host) || $host[0] === '[' ||
+               filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return '';
+        }
+
+        return sprintf('%s@%s', $local, $host);
+    }
+
+    /**
+     * Check whether `normalizeLocal` can be used on this PHP installation.
+     *
+     * The `normalizeLocal` function requires PHP 7.3 with the intl extension.
+     */
+    public static function hasNormalizeLocal(): bool
+    {
+        return defined('MB_CASE_FOLD') && function_exists('idn_to_ascii');
     }
 
     /**
@@ -129,6 +191,14 @@ class Client
             throw new \Exception('Token signature did not validate');
         }
 
+        // Check that the required token claims are set.
+        $missing = array_filter(self::REQUIRED_CLAIMS, function (string $name) use ($token) {
+            return !$token->hasClaim($name);
+        });
+        if (!empty($missing)) {
+            throw new \Exception(sprintf('Token is missing claims: %s', implode(', ', $missing)));
+        }
+
         // Validate the token claims.
         $vdata = new \Lcobucci\JWT\ValidationData();
         $vdata->setIssuer($this->broker);
@@ -137,11 +207,13 @@ class Client
             throw new \Exception('Token claims did not validate');
         }
 
-        // Get the email and consume the nonce.
+        // Consume the nonce.
         $nonce = $token->getClaim('nonce');
-        $email = $token->getClaim('sub');
-        $this->store->consumeNonce($nonce, $email);
+        $email = $token->getClaim('email');
+        $emailOriginal = $token->getClaim('email_original', $email);
+        $this->store->consumeNonce($nonce, $emailOriginal);
 
+        // Return the normalized email.
         return $email;
     }
 
