@@ -2,6 +2,10 @@
 
 namespace Portier\Client;
 
+use Lcobucci\JWT\Configuration as JwtConfig;
+use Lcobucci\JWT\Validation\Constraint as JwtConstraint;
+use Lcobucci\JWT\Signer as JwtSigner;
+
 /**
  * Client for a Portier broker.
  */
@@ -15,9 +19,9 @@ class Client
 
     private const REQUIRED_CLAIMS = ['iss', 'aud', 'exp', 'iat', 'email', 'nonce'];
 
-    private $store;
-    private $redirectUri;
-    private $clientId;
+    private StoreInterface $store;
+    private string $redirectUri;
+    private string $clientId;
 
     /**
      * The origin of the Portier broker.
@@ -45,48 +49,14 @@ class Client
     }
 
     /**
-     * Normalize one or more email addresses.
+     * Normalize an email address.
      *
      * This method is useful when comparing user input to an email address
      * returned in a Portier token. It is not necessary to call this before
      * `authenticate`, normalization is already part of the authentication
      * process.
-     *
-     * For PHP 7.3 with the intl extension, this function can process the email
-     * list locally. Otherwise, note that this function makes an HTTP call to
-     * the Portier broker, without result caching.
-     *
-     * Use `hasNormalizeLocal` to check if local normalization is available at
-     * run-time, or directly use `normalizeLocal` to force-or-fail local
-     * normalization.
-     *
-     * @param  string[] $emails Email addresses to normalize.
-     * @return string[]         Normalized email addresses, empty strings for invalid.
      */
-    public function normalize(array $emails): array
-    {
-        if (self::hasNormalizeLocal()) {
-            return array_map([self::class, 'normalizeLocal'], $emails);
-        } else {
-            $res = $this->store->guzzle->post(
-                $this->broker . '/normalize',
-                ['body' => implode("\n", $emails)]
-            );
-            return explode("\n", (string) $res->getBody());
-        }
-    }
-
-    /**
-     * Normalize an email address. (Pure-PHP version)
-     *
-     * This method is useful when comparing user input to an email address
-     * returned in a Portier token. It is not necessary to call this before
-     * `authenticate`, normalization is already part of the authentication
-     * process.
-     *
-     * This function requires PHP 7.3 with the intl extension.
-     */
-    public static function normalizeLocal(string $email): string
+    public static function normalize(string $email): string
     {
         // Repeat these checks here, so PHPStan understands.
         assert(defined('MB_CASE_FOLD') && function_exists('idn_to_ascii'));
@@ -118,16 +88,6 @@ class Client
     }
 
     /**
-     * Check whether `normalizeLocal` can be used on this PHP installation.
-     *
-     * The `normalizeLocal` function requires PHP 7.3 with the intl extension.
-     */
-    public static function hasNormalizeLocal(): bool
-    {
-        return defined('MB_CASE_FOLD') && function_exists('idn_to_ascii');
-    }
-
-    /**
      * Start authentication of an email address.
      * @param  string $email  Email address to authenticate.
      * @return string         URL to redirect the browser to.
@@ -154,10 +114,16 @@ class Client
      */
     public function verify(string $token): string
     {
-        // Parse token and get the key ID from its header.
-        $parser = new \Lcobucci\JWT\Parser();
-        $token = $parser->parse($token);
-        $kid = $token->getHeader('kid');
+        // Parse the token.
+        $jwt = JwtConfig::forUnsecuredSigner();
+        $token = $jwt->parser()->parse($token);
+        assert($token instanceof \Lcobucci\JWT\UnencryptedToken);
+
+        // Get the key ID from the token header.
+        $kid = $token->headers()->get('kid');
+        if (empty($kid)) {
+            throw new \Exception('Token has no "kid" header field');
+        }
 
         // Fetch broker keys.
         $discoveryUrl = $this->broker . '/.well-known/openid-configuration';
@@ -174,43 +140,40 @@ class Client
         // Find the matching public key, and verify the signature.
         $publicKey = null;
         foreach ($keysDoc->keys as $key) {
-            if (isset($key->alg) && $key->alg === 'RS256' &&
+            if ($key instanceof \stdClass &&
+                    isset($key->alg) && $key->alg === 'RS256' &&
                     isset($key->kid) && $key->kid === $kid &&
                     isset($key->n) && isset($key->e)) {
-                $publicKey = $key;
+                $publicKey = self::parseJwk($key);
                 break;
             }
         }
         if ($publicKey === null) {
             throw new \Exception('Cannot find the public key used to sign the token');
         }
-        if (!$token->verify(
-            new \Lcobucci\JWT\Signer\Rsa\Sha256(),
-            self::parseJwk($publicKey)
-        )) {
-            throw new \Exception('Token signature did not validate');
-        }
+
+        // Validate the token claims.
+        $constraints = [
+            new JwtConstraint\SignedWith(new JwtSigner\Rsa\Sha256(), $publicKey),
+            new JwtConstraint\IssuedBy($this->broker),
+            new JwtConstraint\PermittedFor($this->clientId),
+            new JwtConstraint\LooseValidAt(\Lcobucci\Clock\SystemClock::fromUTC()),
+        ];
+        $jwt->validator()->assert($token, ...$constraints);
 
         // Check that the required token claims are set.
-        $missing = array_filter(self::REQUIRED_CLAIMS, function (string $name) use ($token) {
-            return !$token->hasClaim($name);
+        $claims = $token->claims();
+        $missing = array_filter(self::REQUIRED_CLAIMS, function (string $name) use ($claims) {
+            return !$claims->has($name);
         });
         if (!empty($missing)) {
             throw new \Exception(sprintf('Token is missing claims: %s', implode(', ', $missing)));
         }
 
-        // Validate the token claims.
-        $vdata = new \Lcobucci\JWT\ValidationData();
-        $vdata->setIssuer($this->broker);
-        $vdata->setAudience($this->clientId);
-        if (!$token->validate($vdata)) {
-            throw new \Exception('Token claims did not validate');
-        }
-
         // Consume the nonce.
-        $nonce = $token->getClaim('nonce');
-        $email = $token->getClaim('email');
-        $emailOriginal = $token->getClaim('email_original', $email);
+        $nonce = $claims->get('nonce');
+        $email = $claims->get('email');
+        $emailOriginal = $claims->get('email_original', $email);
         $this->store->consumeNonce($nonce, $emailOriginal);
 
         // Return the normalized email.
@@ -220,10 +183,10 @@ class Client
     /**
      * Parse a JWK into a PEM public key.
      */
-    private static function parseJwk($jwk): string
+    private static function parseJwk(\stdClass $jwk): JwtSigner\Key
     {
-        $n = gmp_init(bin2hex(\Base64Url\Base64Url::decode($jwk->n)), 16);
-        $e = gmp_init(bin2hex(\Base64Url\Base64Url::decode($jwk->e)), 16);
+        $n = gmp_init(bin2hex(self::decodeBase64Url($jwk->n)), 16);
+        $e = gmp_init(bin2hex(self::decodeBase64Url($jwk->e)), 16);
 
         $seq = new \FG\ASN1\Universal\Sequence();
         $seq->addChild(new \FG\ASN1\Universal\Integer(gmp_strval($n)));
@@ -232,10 +195,11 @@ class Client
 
         $encoded = base64_encode($pkey->getBinary());
 
-        return
+        return JwtSigner\Key\InMemory::plainText(
             "-----BEGIN PUBLIC KEY-----\n" .
             chunk_split($encoded, 64, "\n") .
-            "-----END PUBLIC KEY-----\n";
+            "-----END PUBLIC KEY-----\n"
+        );
     }
 
     /**
@@ -268,5 +232,15 @@ class Client
         }
 
         return $res;
+    }
+
+    private static function decodeBase64Url(string $input): string
+    {
+        $output = base64_decode(strtr($input, '-_', '+/'), true);
+        if ($output === false) {
+            throw new \Exception("Invalid base64");
+        }
+
+        return $output;
     }
 }
