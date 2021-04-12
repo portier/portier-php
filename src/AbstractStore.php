@@ -52,7 +52,7 @@ abstract class AbstractStore implements StoreInterface
      * @param  string    $url  The URL to fetch.
      * @return \stdClass       An object with `ttl` and `data` properties.
      */
-    public function fetch(string $url)
+    public function fetch(string $url): \stdClass
     {
         $res = $this->guzzle->get($url);
 

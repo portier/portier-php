@@ -6,12 +6,10 @@ use \Portier\Client;
 
 class ClientTest extends \PHPUnit\Framework\TestCase
 {
-    public function testLocalNormalize()
-    {
-        if (!Client\Client::hasNormalizeLocal()) {
-            return;
-        }
+    use \Prophecy\PhpUnit\ProphecyTrait;
 
+    public function testNormalize()
+    {
         $valid = [
           ['example.foo+bar@example.com', 'example.foo+bar@example.com'],
           ['EXAMPLE.FOO+BAR@EXAMPLE.COM', 'example.foo+bar@example.com'],
@@ -22,7 +20,7 @@ class ClientTest extends \PHPUnit\Framework\TestCase
         ];
         foreach ($valid as $pair) {
             list($i, $o) = $pair;
-            $this->assertEquals(Client\Client::normalizeLocal($i), $o);
+            $this->assertEquals(Client\Client::normalize($i), $o);
         }
 
         $invalid = [
@@ -33,7 +31,7 @@ class ClientTest extends \PHPUnit\Framework\TestCase
           'foo@[::1]',
         ];
         foreach ($invalid as $i) {
-            $this->assertEquals(Client\Client::normalizeLocal($i), '');
+            $this->assertEquals(Client\Client::normalize($i), '');
         }
     }
 

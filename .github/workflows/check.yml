@@ -1,0 +1,53 @@
+name: Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php-versions: ['7.4', '8.0']
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-versions }}
+          extensions: redis
+          tools: cs2pr
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: |
+          echo "::set-output name=dir::$(composer config cache-files-dir)"
+
+      - name: Composer cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer
+
+      - name: Composer install
+        run: composer install
+
+      - name: PHP CodeSniffer
+        run: vendor/bin/phpcs --standard=PSR2 --report=checkstyle src/ | cs2pr
+
+      - name: PHPStan
+        run: vendor/bin/phpstan analyse -l max -c phpstan.neon --error-format=checkstyle src/ | cs2pr
+
+      - name: Configure PHPUnit matchers
+        uses: mheap/phpunit-matcher-action@v1
+
+      - name: PHPUnit
+        run: vendor/bin/phpunit --teamcity

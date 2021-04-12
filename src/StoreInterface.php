@@ -9,11 +9,11 @@ interface StoreInterface
 {
     /**
      * Fetch JSON from cache or using HTTP GET.
-     * @param  string $cacheId  The cache ID to use for this request.
-     * @param  string $url      The URL to fetch of the ID is not available.
-     * @return object           The JSON object from the response body.
+     * @param  string    $cacheId  The cache ID to use for this request.
+     * @param  string    $url      The URL to fetch of the ID is not available.
+     * @return \stdClass           The JSON object from the response body.
      */
-    public function fetchCached(string $cacheId, string $url);
+    public function fetchCached(string $cacheId, string $url): \stdClass;
 
     /**
      * Generate and store a nonce.
@@ -27,5 +27,5 @@ interface StoreInterface
      * @param string $nonce  The nonce to resolve.
      * @param string $email  The email address that is being verified.
      */
-    public function consumeNonce(string $nonce, string $email);
+    public function consumeNonce(string $nonce, string $email): void;
 }

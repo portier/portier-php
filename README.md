@@ -1,8 +1,8 @@
 # portier-php
 
-A [Portier] client library for PHP
+A [Portier] client library for PHP.
 
- [Portier]: https://portier.github.io/
+[portier]: https://portier.github.io/
 
 ### Example
 
@@ -11,7 +11,9 @@ A [Portier] client library for PHP
 
 require 'vendor/autoload.php';
 
-$app = new \Slim\App();
+$app = \Slim\Factory\AppFactory::create();
+$app->addRoutingMiddleware();
+$app->addErrorMiddleware(true, true, true);
 
 $redis = new Redis();
 $redis->pconnect('127.0.0.1', 6379);
@@ -40,7 +42,7 @@ EOF
 });
 
 $app->post('/auth', function($req, $res) use ($portier) {
-    $authUrl = $portier->authenticate($req->getParsedBodyParam('email'));
+    $authUrl = $portier->authenticate($req->getParsedBody()['email']);
 
     return $res
         ->withStatus(303)
@@ -48,7 +50,7 @@ $app->post('/auth', function($req, $res) use ($portier) {
 });
 
 $app->post('/verify', function($req, $res) use ($portier) {
-    $email = $portier->verify($req->getParsedBodyParam('id_token'));
+    $email = $portier->verify($req->getParsedBody()['id_token']);
 
     $res = $res
         ->withStatus(200)

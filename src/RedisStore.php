@@ -7,7 +7,7 @@ namespace Portier\Client;
  */
 class RedisStore extends AbstractStore
 {
-    public $redis;
+    public \Redis $redis;
 
     /**
      * Constructor
@@ -23,7 +23,7 @@ class RedisStore extends AbstractStore
     /**
      * {@inheritDoc}
      */
-    public function fetchCached(string $cacheId, string $url)
+    public function fetchCached(string $cacheId, string $url): \stdClass
     {
         $key = 'cache:' . $cacheId;
 
@@ -33,7 +33,13 @@ class RedisStore extends AbstractStore
         }
 
         $res = $this->fetch($url);
-        $this->redis->setEx($key, $res->ttl, json_encode($res->data));
+
+        $encoded = json_encode($res->data);
+        if ($encoded === false) {
+            throw new \Exception('JSON encoding failed');
+        }
+
+        $this->redis->setex($key, $res->ttl, $encoded);
 
         return $res->data;
     }
@@ -46,7 +52,7 @@ class RedisStore extends AbstractStore
         $nonce = $this->generateNonce($email);
 
         $key = 'nonce:' . $nonce;
-        $this->redis->setEx($key, $this->nonceTtl, $email);
+        $this->redis->setex($key, (int) $this->nonceTtl, $email);
 
         return $nonce;
     }
@@ -54,7 +60,7 @@ class RedisStore extends AbstractStore
     /**
      * {@inheritDoc}
      */
-    public function consumeNonce(string $nonce, string $email)
+    public function consumeNonce(string $nonce, string $email): void
     {
         $key = 'nonce:' . $nonce;
         $res = $this->redis->multi()

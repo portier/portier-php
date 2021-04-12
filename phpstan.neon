@@ -1,4 +1,12 @@
 parameters:
-  ignoreErrors:
-   # Invalid type hint
-   - '|^Parameter #1 \$value of class FG\\ASN1\\Universal\\Integer constructor expects int, string given\.$|'
+	ignoreErrors:
+		-
+			message: "#^Parameter \\#1 \\$value of class FG\\\\ASN1\\\\Universal\\\\Integer constructor expects int, string given\\.$#"
+			count: 2
+			path: src/Client.php
+
+		-
+			message: "#^Cannot call method del\\(\\) on string\\|false\\.$#"
+			count: 1
+			path: src/RedisStore.php
+
