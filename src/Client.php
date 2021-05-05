@@ -157,11 +157,13 @@ class Client
         }
 
         // Validate the token claims.
+        $clock = \Lcobucci\Clock\SystemClock::fromUTC();
+        $leeway = new \DateInterval('PT' . $this->leeway . 'S');
         $constraints = [
             new JwtConstraint\SignedWith(new JwtSigner\Rsa\Sha256(), $publicKey),
             new JwtConstraint\IssuedBy($this->broker),
             new JwtConstraint\PermittedFor($this->clientId),
-            new JwtConstraint\LooseValidAt(\Lcobucci\Clock\SystemClock::fromUTC()),
+            new JwtConstraint\LooseValidAt($clock, $leeway),
         ];
         $jwt->validator()->assert($token, ...$constraints);
 
