@@ -94,6 +94,11 @@ class Client
      */
     public function authenticate(string $email): string
     {
+        $authEndpoint = $this->fetchDiscovery()->authorization_endpoint ?? null;
+        if (!is_string($authEndpoint)) {
+            throw new \Exception('No authorization_endpoint in discovery document');
+        }
+
         $nonce = $this->store->createNonce($email);
         $query = http_build_query([
             'login_hint' => $email,
@@ -104,7 +109,7 @@ class Client
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUri,
         ]);
-        return $this->broker . '/auth?' . $query;
+        return $authEndpoint . '?' . $query;
     }
 
     /**
@@ -126,13 +131,12 @@ class Client
         }
 
         // Fetch broker keys.
-        $discoveryUrl = $this->broker . '/.well-known/openid-configuration';
-        $discoveryDoc = $this->store->fetchCached('discovery', $discoveryUrl);
-        if (!isset($discoveryDoc->jwks_uri) || !is_string($discoveryDoc->jwks_uri)) {
-            throw new \Exception('Discovery document incorrectly formatted');
+        $jwksUri = $this->fetchDiscovery()->jwks_uri ?? null;
+        if (!is_string($jwksUri)) {
+            throw new \Exception('No jwks_uri in discovery document');
         }
 
-        $keysDoc = $this->store->fetchCached('keys', $discoveryDoc->jwks_uri);
+        $keysDoc = $this->store->fetchCached('keys', $jwksUri);
         if (!isset($keysDoc->keys) || !is_array($keysDoc->keys)) {
             throw new \Exception('Keys document incorrectly formatted');
         }
@@ -178,6 +182,15 @@ class Client
 
         // Return the normalized email.
         return $email;
+    }
+
+    /**
+     * Fetches the OpenID discovery document from the broker.
+     */
+    private function fetchDiscovery(): \stdClass
+    {
+        $discoveryUrl = $this->broker . '/.well-known/openid-configuration';
+        return $this->store->fetchCached('discovery', $discoveryUrl);
     }
 
     /**
