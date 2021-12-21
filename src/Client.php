@@ -176,10 +176,20 @@ class Client
             throw new \Exception(sprintf('Token is missing claims: %s', implode(', ', $missing)));
         }
 
-        // Consume the nonce.
         $nonce = $claims->get('nonce');
         $email = $claims->get('email');
         $emailOriginal = $claims->get('email_original', $email);
+        if (!is_string($nonce)) {
+            throw new \Exception(sprintf('Token claim "nonce" is not a string'));
+        }
+        if (!is_string($email)) {
+            throw new \Exception(sprintf('Token claim "email" is not a string'));
+        }
+        if (!is_string($emailOriginal)) {
+            throw new \Exception(sprintf('Token claim "email_original" is not a string'));
+        }
+
+        // Consume the nonce.
         $this->store->consumeNonce($nonce, $emailOriginal);
 
         // Return the normalized email.

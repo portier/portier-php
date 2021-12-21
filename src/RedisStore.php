@@ -29,7 +29,10 @@ class RedisStore extends AbstractStore
 
         $data = $this->redis->get($key);
         if ($data) {
-            return json_decode($data);
+            $data = json_decode($data);
+            assert($data instanceof \stdClass);
+
+            return $data;
         }
 
         $res = $this->fetch($url);
