@@ -13,11 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        php-versions: ['7.4', '8.0', '8.1']
+        php-versions: ['7.4', '8.0', '8.1', '8.2']
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -32,7 +32,7 @@ jobs:
           echo "::set-output name=dir::$(composer config cache-files-dir)"
 
       - name: Composer cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-composer
@@ -50,15 +50,17 @@ jobs:
         uses: mheap/phpunit-matcher-action@v1
 
       - name: PHPUnit
+        # TODO: Waiting for a compatible Prophecy release.
+        if: matrix.php-versions != '8.2'
         run: vendor/bin/phpunit --teamcity
 
       - name: Set up Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: ^1.16
 
       - name: Go cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -66,7 +68,7 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Build tester
-        run: go get -v github.com/portier/client-tester
+        run: go install -v github.com/portier/client-tester@latest
 
       - name: Run test suite
         run: ~/go/bin/client-tester -bin ./client-tester.php
