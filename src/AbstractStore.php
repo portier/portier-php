@@ -11,36 +11,41 @@ abstract class AbstractStore implements StoreInterface
 {
     /**
      * The Guzzle instance to use.
+     *
      * @var \GuzzleHttp\Client
      */
     public $guzzle;
 
     /**
      * Lifespan of a nonce.
+     *
      * @var float
      */
     public $nonceTtl = 15 * 60;
 
     /**
-     * Minimum time to cache a HTTP response
+     * Minimum time to cache a HTTP response.
+     *
      * @var float
      */
     public $cacheMinTtl = 60 * 60;
 
     /**
-     * Constructor
+     * Constructor.
      */
     public function __construct()
     {
         $this->guzzle = new \GuzzleHttp\Client([
-            'timeout' => 10
+            'timeout' => 10,
         ]);
     }
 
     /**
      * Generate a nonce value.
-     * @param  string $email  Optional email context
-     * @return string         The generated nonce.
+     *
+     * @param string $email Optional email context
+     *
+     * @return string the generated nonce
      */
     public function generateNonce(string $email): string
     {
@@ -49,8 +54,10 @@ abstract class AbstractStore implements StoreInterface
 
     /**
      * Fetch a URL using HTTP GET.
-     * @param  string    $url  The URL to fetch.
-     * @return \stdClass       An object with `ttl` and `data` properties.
+     *
+     * @param string $url the URL to fetch
+     *
+     * @return \stdClass an object with `ttl` and `data` properties
      */
     public function fetch(string $url): \stdClass
     {

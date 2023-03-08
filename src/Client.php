@@ -3,8 +3,8 @@
 namespace Portier\Client;
 
 use Lcobucci\JWT\Configuration as JwtConfig;
-use Lcobucci\JWT\Validation\Constraint as JwtConstraint;
 use Lcobucci\JWT\Signer as JwtSigner;
+use Lcobucci\JWT\Validation\Constraint as JwtConstraint;
 
 /**
  * Client for a Portier broker.
@@ -13,6 +13,7 @@ class Client
 {
     /**
      * Default Portier broker origin.
+     *
      * @var string
      */
     public const DEFAULT_BROKER = 'https://broker.portier.io';
@@ -25,20 +26,23 @@ class Client
 
     /**
      * The origin of the Portier broker.
+     *
      * @var string
      */
     public $broker = self::DEFAULT_BROKER;
 
     /**
      * The number of seconds of clock drift to allow.
+     *
      * @var int
      */
     public $leeway = 3 * 60;
 
     /**
-     * Constructor
-     * @param StoreInterface  $store        Store implementation to use.
-     * @param string          $redirectUri  URL that Portier will redirect to.
+     * Constructor.
+     *
+     * @param StoreInterface $store       store implementation to use
+     * @param string         $redirectUri URL that Portier will redirect to
      */
     public function __construct(StoreInterface $store, string $redirectUri)
     {
@@ -62,7 +66,7 @@ class Client
         assert(defined('MB_CASE_FOLD') && function_exists('idn_to_ascii'));
 
         $localEnd = strrpos($email, '@');
-        if ($localEnd === false) {
+        if (false === $localEnd) {
             return '';
         }
 
@@ -79,8 +83,8 @@ class Client
             IDNA_USE_STD3_RULES | IDNA_CHECK_BIDI,
             INTL_IDNA_VARIANT_UTS46
         );
-        if (empty($host) || $host[0] === '[' ||
-               filter_var($host, FILTER_VALIDATE_IP) !== false) {
+        if (empty($host) || '[' === $host[0] ||
+               false !== filter_var($host, FILTER_VALIDATE_IP)) {
             return '';
         }
 
@@ -89,8 +93,10 @@ class Client
 
     /**
      * Start authentication of an email address.
-     * @param  string $email  Email address to authenticate.
-     * @return string         URL to redirect the browser to.
+     *
+     * @param string $email email address to authenticate
+     *
+     * @return string URL to redirect the browser to
      */
     public function authenticate(string $email): string
     {
@@ -109,13 +115,16 @@ class Client
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUri,
         ]);
-        return $authEndpoint . '?' . $query;
+
+        return $authEndpoint.'?'.$query;
     }
 
     /**
      * Verify a token received on our `redirect_uri`.
-     * @param  string $token  The received `id_token` parameter value.
-     * @return string         The verified email address.
+     *
+     * @param string $token the received `id_token` parameter value
+     *
+     * @return string the verified email address
      */
     public function verify(string $token): string
     {
@@ -145,20 +154,20 @@ class Client
         $publicKey = null;
         foreach ($keysDoc->keys as $key) {
             if ($key instanceof \stdClass &&
-                    isset($key->alg) && $key->alg === 'RS256' &&
+                    isset($key->alg) && 'RS256' === $key->alg &&
                     isset($key->kid) && $key->kid === $kid &&
                     isset($key->n) && isset($key->e)) {
                 $publicKey = self::parseJwk($key);
                 break;
             }
         }
-        if ($publicKey === null) {
+        if (null === $publicKey) {
             throw new \Exception('Cannot find the public key used to sign the token');
         }
 
         // Validate the token claims.
         $clock = \Lcobucci\Clock\SystemClock::fromUTC();
-        $leeway = new \DateInterval('PT' . $this->leeway . 'S');
+        $leeway = new \DateInterval('PT'.$this->leeway.'S');
         $constraints = [
             new JwtConstraint\SignedWith(new JwtSigner\Rsa\Sha256(), $publicKey),
             new JwtConstraint\IssuedBy($this->broker),
@@ -201,7 +210,8 @@ class Client
      */
     private function fetchDiscovery(): \stdClass
     {
-        $discoveryUrl = $this->broker . '/.well-known/openid-configuration';
+        $discoveryUrl = $this->broker.'/.well-known/openid-configuration';
+
         return $this->store->fetchCached('discovery', $discoveryUrl);
     }
 
@@ -221,19 +231,19 @@ class Client
         $encoded = base64_encode($pkey->getBinary());
 
         return JwtSigner\Key\InMemory::plainText(
-            "-----BEGIN PUBLIC KEY-----\n" .
-            chunk_split($encoded, 64, "\n") .
+            "-----BEGIN PUBLIC KEY-----\n".
+            chunk_split($encoded, 64, "\n").
             "-----END PUBLIC KEY-----\n"
         );
     }
 
     /**
-     * Get the origin for a URL
+     * Get the origin for a URL.
      */
     private static function getOrigin(string $url): string
     {
         $components = parse_url($url);
-        if ($components === false) {
+        if (false === $components) {
             throw new \Exception('Could not parse the redirect URI');
         }
 
@@ -247,12 +257,12 @@ class Client
         }
         $host = $components['host'];
 
-        $res = $scheme . '://' . $host;
+        $res = $scheme.'://'.$host;
         if (isset($components['port'])) {
             $port = $components['port'];
-            if (($scheme === 'http' && $port !== 80) ||
-                    ($scheme === 'https' && $port !== 443)) {
-                $res .= ':' . $port;
+            if (('http' === $scheme && 80 !== $port) ||
+                    ('https' === $scheme && 443 !== $port)) {
+                $res .= ':'.$port;
             }
         }
 
@@ -262,8 +272,8 @@ class Client
     private static function decodeBase64Url(string $input): string
     {
         $output = base64_decode(strtr($input, '-_', '+/'), true);
-        if ($output === false) {
-            throw new \Exception("Invalid base64");
+        if (false === $output) {
+            throw new \Exception('Invalid base64');
         }
 
         return $output;

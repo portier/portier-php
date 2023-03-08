@@ -10,8 +10,9 @@ class RedisStore extends AbstractStore
     public \Redis $redis;
 
     /**
-     * Constructor
-     * @param \Redis $redis  The Redis instance to use.
+     * Constructor.
+     *
+     * @param \Redis $redis the Redis instance to use
      */
     public function __construct(\Redis $redis)
     {
@@ -25,7 +26,7 @@ class RedisStore extends AbstractStore
      */
     public function fetchCached(string $cacheId, string $url): \stdClass
     {
-        $key = 'cache:' . $cacheId;
+        $key = 'cache:'.$cacheId;
 
         $data = $this->redis->get($key);
         if ($data) {
@@ -38,7 +39,7 @@ class RedisStore extends AbstractStore
         $res = $this->fetch($url);
 
         $encoded = json_encode($res->data);
-        if ($encoded === false) {
+        if (false === $encoded) {
             throw new \Exception('JSON encoding failed');
         }
 
@@ -54,7 +55,7 @@ class RedisStore extends AbstractStore
     {
         $nonce = $this->generateNonce($email);
 
-        $key = 'nonce:' . $nonce;
+        $key = 'nonce:'.$nonce;
         $this->redis->setex($key, (int) $this->nonceTtl, $email);
 
         return $nonce;
@@ -65,7 +66,7 @@ class RedisStore extends AbstractStore
      */
     public function consumeNonce(string $nonce, string $email): void
     {
-        $key = 'nonce:' . $nonce;
+        $key = 'nonce:'.$nonce;
         $res = $this->redis->multi()
             ->get($key)
             ->del($key)
