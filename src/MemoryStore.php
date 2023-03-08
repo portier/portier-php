@@ -16,7 +16,7 @@ class MemoryStore extends AbstractStore
     private $nonces;
 
     /**
-     * Constructor
+     * Constructor.
      */
     public function __construct()
     {
@@ -32,7 +32,7 @@ class MemoryStore extends AbstractStore
     public function fetchCached(string $cacheId, string $url): \stdClass
     {
         $item = $this->cache[$cacheId] ?? null;
-        if ($item !== null && time() < $item->expires) {
+        if (null !== $item && time() < $item->expires) {
             return $item->data;
         }
 
@@ -67,7 +67,7 @@ class MemoryStore extends AbstractStore
     public function consumeNonce(string $nonce, string $email): void
     {
         $item = $this->nonces[$nonce] ?? null;
-        if ($item !== null) {
+        if (null !== $item) {
             unset($this->nonces[$nonce]);
 
             if ($item->email === $email && time() < $item->expires) {

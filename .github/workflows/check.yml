@@ -40,19 +40,19 @@ jobs:
       - name: Composer install
         run: composer install
 
-      - name: PHP CodeSniffer
-        run: vendor/bin/phpcs --standard=PSR2 --report=checkstyle src/ | cs2pr
+      - name: PHP Coding Standards Fixer
+        # Set to the latest version supported by php-cs-fixer.
+        if: matrix.php-versions == '8.1'
+        run: composer run php-cs-fixer -- --dry-run --format=checkstyle | cs2pr
 
       - name: PHPStan
-        run: vendor/bin/phpstan analyse -l max -c phpstan.neon --error-format=checkstyle src/ | cs2pr
+        run: composer run phpstan -- --error-format=checkstyle | cs2pr
 
       - name: Configure PHPUnit matchers
         uses: mheap/phpunit-matcher-action@v1
 
       - name: PHPUnit
-        # TODO: Waiting for a compatible Prophecy release.
-        if: matrix.php-versions != '8.2'
-        run: vendor/bin/phpunit --teamcity
+        run: composer run phpunit -- --teamcity
 
       - name: Set up Go
         uses: actions/setup-go@v3
