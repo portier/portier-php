@@ -52,8 +52,6 @@ jobs:
         uses: mheap/phpunit-matcher-action@v1
 
       - name: PHPUnit
-        # TODO: Waiting for a compatible Prophecy release.
-        if: matrix.php-versions != '8.2'
         run: composer run phpunit -- --teamcity
 
       - name: Set up Go
