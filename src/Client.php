@@ -2,9 +2,11 @@
 
 namespace Portier\Client;
 
-use Lcobucci\JWT\Configuration as JwtConfig;
+use Lcobucci\JWT\Encoding\JoseEncoder;
 use Lcobucci\JWT\Signer as JwtSigner;
+use Lcobucci\JWT\Token\Parser;
 use Lcobucci\JWT\Validation\Constraint as JwtConstraint;
+use Lcobucci\JWT\Validation\Validator;
 
 /**
  * Client for a Portier broker.
@@ -130,9 +132,13 @@ class Client
      */
     public function verify(string $token): VerifyResult
     {
+        assert(!empty($token));
+        assert(!empty($this->broker));
+        assert(!empty($this->clientId));
+
         // Parse the token.
-        $jwt = JwtConfig::forUnsecuredSigner();
-        $token = $jwt->parser()->parse($token);
+        $parser = new Parser(new JoseEncoder());
+        $token = $parser->parse($token);
         assert($token instanceof \Lcobucci\JWT\UnencryptedToken);
 
         // Get the key ID from the token header.
@@ -170,13 +176,11 @@ class Client
         // Validate the token claims.
         $clock = \Lcobucci\Clock\SystemClock::fromUTC();
         $leeway = new \DateInterval('PT'.$this->leeway.'S');
-        $constraints = [
-            new JwtConstraint\SignedWith(new JwtSigner\Rsa\Sha256(), $publicKey),
-            new JwtConstraint\IssuedBy($this->broker),
-            new JwtConstraint\PermittedFor($this->clientId),
-            new JwtConstraint\LooseValidAt($clock, $leeway),
-        ];
-        $jwt->validator()->assert($token, ...$constraints);
+        $validator = new Validator();
+        $validator->assert($token, new JwtConstraint\SignedWith(new JwtSigner\Rsa\Sha256(), $publicKey));
+        $validator->assert($token, new JwtConstraint\IssuedBy($this->broker));
+        $validator->assert($token, new JwtConstraint\PermittedFor($this->clientId));
+        $validator->assert($token, new JwtConstraint\LooseValidAt($clock, $leeway));
 
         // Check that the required token claims are set.
         $claims = $token->claims();
@@ -203,8 +207,13 @@ class Client
         // Consume the nonce.
         $this->store->consumeNonce($nonce, $emailOriginal);
 
+        $state = $claims->get('state');
+        if (!is_string($state)) {
+            $state = null;
+        }
+
         // Return the normalized email.
-        return new VerifyResult($email, $claims->get('state'));
+        return new VerifyResult($email, $state);
     }
 
     /**
