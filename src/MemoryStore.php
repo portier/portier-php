@@ -26,9 +26,6 @@ class MemoryStore extends AbstractStore
         $this->nonces = [];
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function fetchCached(string $cacheId, string $url): \stdClass
     {
         $item = $this->cache[$cacheId] ?? null;
@@ -46,9 +43,6 @@ class MemoryStore extends AbstractStore
         return $res->data;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function createNonce(string $email): string
     {
         $nonce = $this->generateNonce($email);
@@ -61,9 +55,6 @@ class MemoryStore extends AbstractStore
         return $nonce;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function consumeNonce(string $nonce, string $email): void
     {
         $item = $this->nonces[$nonce] ?? null;

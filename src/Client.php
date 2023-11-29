@@ -83,8 +83,8 @@ class Client
             IDNA_USE_STD3_RULES | IDNA_CHECK_BIDI,
             INTL_IDNA_VARIANT_UTS46
         );
-        if (empty($host) || '[' === $host[0] ||
-               false !== filter_var($host, FILTER_VALIDATE_IP)) {
+        if (empty($host) || '[' === $host[0]
+               || false !== filter_var($host, FILTER_VALIDATE_IP)) {
             return '';
         }
 
@@ -153,10 +153,10 @@ class Client
         // Find the matching public key, and verify the signature.
         $publicKey = null;
         foreach ($keysDoc->keys as $key) {
-            if ($key instanceof \stdClass &&
-                    isset($key->alg) && 'RS256' === $key->alg &&
-                    isset($key->kid) && $key->kid === $kid &&
-                    isset($key->n) && isset($key->e)) {
+            if ($key instanceof \stdClass
+                    && isset($key->alg) && 'RS256' === $key->alg
+                    && isset($key->kid) && $key->kid === $kid
+                    && isset($key->n) && isset($key->e)) {
                 $publicKey = self::parseJwk($key);
                 break;
             }
@@ -260,8 +260,8 @@ class Client
         $res = $scheme.'://'.$host;
         if (isset($components['port'])) {
             $port = $components['port'];
-            if (('http' === $scheme && 80 !== $port) ||
-                    ('https' === $scheme && 443 !== $port)) {
+            if (('http' === $scheme && 80 !== $port)
+                    || ('https' === $scheme && 443 !== $port)) {
                 $res .= ':'.$port;
             }
         }
