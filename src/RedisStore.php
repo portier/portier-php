@@ -21,9 +21,6 @@ class RedisStore extends AbstractStore
         $this->redis = $redis;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function fetchCached(string $cacheId, string $url): \stdClass
     {
         $key = 'cache:'.$cacheId;
@@ -48,9 +45,6 @@ class RedisStore extends AbstractStore
         return $res->data;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function createNonce(string $email): string
     {
         $nonce = $this->generateNonce($email);
@@ -61,9 +55,6 @@ class RedisStore extends AbstractStore
         return $nonce;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function consumeNonce(string $nonce, string $email): void
     {
         $key = 'nonce:'.$nonce;

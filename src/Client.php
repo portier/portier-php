@@ -2,9 +2,11 @@
 
 namespace Portier\Client;
 
-use Lcobucci\JWT\Configuration as JwtConfig;
+use Lcobucci\JWT\Encoding\JoseEncoder;
 use Lcobucci\JWT\Signer as JwtSigner;
+use Lcobucci\JWT\Token\Parser;
 use Lcobucci\JWT\Validation\Constraint as JwtConstraint;
+use Lcobucci\JWT\Validation\Validator;
 
 /**
  * Client for a Portier broker.
@@ -83,8 +85,8 @@ class Client
             IDNA_USE_STD3_RULES | IDNA_CHECK_BIDI,
             INTL_IDNA_VARIANT_UTS46
         );
-        if (empty($host) || '[' === $host[0] ||
-               false !== filter_var($host, FILTER_VALIDATE_IP)) {
+        if (empty($host) || '[' === $host[0]
+               || false !== filter_var($host, FILTER_VALIDATE_IP)) {
             return '';
         }
 
@@ -95,10 +97,11 @@ class Client
      * Start authentication of an email address.
      *
      * @param string $email email address to authenticate
+     * @param string $state state to carry along, will be returned in `verify`
      *
      * @return string URL to redirect the browser to
      */
-    public function authenticate(string $email): string
+    public function authenticate(string $email, string $state = null): string
     {
         $authEndpoint = $this->fetchDiscovery()->authorization_endpoint ?? null;
         if (!is_string($authEndpoint)) {
@@ -106,7 +109,7 @@ class Client
         }
 
         $nonce = $this->store->createNonce($email);
-        $query = http_build_query([
+        $query = [
             'login_hint' => $email,
             'scope' => 'openid email',
             'nonce' => $nonce,
@@ -114,23 +117,28 @@ class Client
             'response_mode' => 'form_post',
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUri,
-        ]);
+        ];
+        if (null !== $state) {
+            $query['state'] = $state;
+        }
 
-        return $authEndpoint.'?'.$query;
+        return $authEndpoint.'?'.http_build_query($query);
     }
 
     /**
      * Verify a token received on our `redirect_uri`.
      *
      * @param string $token the received `id_token` parameter value
-     *
-     * @return string the verified email address
      */
-    public function verify(string $token): string
+    public function verify(string $token): VerifyResult
     {
+        assert(!empty($token));
+        assert(!empty($this->broker));
+        assert(!empty($this->clientId));
+
         // Parse the token.
-        $jwt = JwtConfig::forUnsecuredSigner();
-        $token = $jwt->parser()->parse($token);
+        $parser = new Parser(new JoseEncoder());
+        $token = $parser->parse($token);
         assert($token instanceof \Lcobucci\JWT\UnencryptedToken);
 
         // Get the key ID from the token header.
@@ -153,10 +161,10 @@ class Client
         // Find the matching public key, and verify the signature.
         $publicKey = null;
         foreach ($keysDoc->keys as $key) {
-            if ($key instanceof \stdClass &&
-                    isset($key->alg) && 'RS256' === $key->alg &&
-                    isset($key->kid) && $key->kid === $kid &&
-                    isset($key->n) && isset($key->e)) {
+            if ($key instanceof \stdClass
+                    && isset($key->alg) && 'RS256' === $key->alg
+                    && isset($key->kid) && $key->kid === $kid
+                    && isset($key->n) && isset($key->e)) {
                 $publicKey = self::parseJwk($key);
                 break;
             }
@@ -168,13 +176,11 @@ class Client
         // Validate the token claims.
         $clock = \Lcobucci\Clock\SystemClock::fromUTC();
         $leeway = new \DateInterval('PT'.$this->leeway.'S');
-        $constraints = [
-            new JwtConstraint\SignedWith(new JwtSigner\Rsa\Sha256(), $publicKey),
-            new JwtConstraint\IssuedBy($this->broker),
-            new JwtConstraint\PermittedFor($this->clientId),
-            new JwtConstraint\LooseValidAt($clock, $leeway),
-        ];
-        $jwt->validator()->assert($token, ...$constraints);
+        $validator = new Validator();
+        $validator->assert($token, new JwtConstraint\SignedWith(new JwtSigner\Rsa\Sha256(), $publicKey));
+        $validator->assert($token, new JwtConstraint\IssuedBy($this->broker));
+        $validator->assert($token, new JwtConstraint\PermittedFor($this->clientId));
+        $validator->assert($token, new JwtConstraint\LooseValidAt($clock, $leeway));
 
         // Check that the required token claims are set.
         $claims = $token->claims();
@@ -201,8 +207,13 @@ class Client
         // Consume the nonce.
         $this->store->consumeNonce($nonce, $emailOriginal);
 
+        $state = $claims->get('state');
+        if (!is_string($state)) {
+            $state = null;
+        }
+
         // Return the normalized email.
-        return $email;
+        return new VerifyResult($email, $state);
     }
 
     /**
@@ -260,8 +271,8 @@ class Client
         $res = $scheme.'://'.$host;
         if (isset($components['port'])) {
             $port = $components['port'];
-            if (('http' === $scheme && 80 !== $port) ||
-                    ('https' === $scheme && 443 !== $port)) {
+            if (('http' === $scheme && 80 !== $port)
+                    || ('https' === $scheme && 443 !== $port)) {
                 $res .= ':'.$port;
             }
         }
