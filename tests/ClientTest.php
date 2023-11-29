@@ -3,12 +3,9 @@
 namespace Tests;
 
 use Portier\Client;
-use Prophecy\Argument;
 
 class ClientTest extends \PHPUnit\Framework\TestCase
 {
-    use \Prophecy\PhpUnit\ProphecyTrait;
-
     public function testNormalize()
     {
         $valid = [
@@ -38,23 +35,36 @@ class ClientTest extends \PHPUnit\Framework\TestCase
 
     public function testAuthenticate()
     {
-        $store = $this->prophesize(Client\StoreInterface::class);
-        $store->fetchCached('discovery', Argument::type('string'))
-            ->willReturn((object) [
-                'authorization_endpoint' => 'http://imaginary-server.test/auth',
-            ])
-            ->shouldBeCalled();
-        $store->createNonce('johndoe@example.com')
-            ->willReturn('foobar')
-            ->shouldBeCalled();
+        $store = new class() implements Client\StoreInterface {
+            public bool $fetchCachedCalled = false;
+            public bool $createNonceCalled = false;
 
-        $client = new Client\Client(
-            $store->reveal(),
-            'https://imaginary-client.test/callback'
-        );
+            public function fetchCached(string $cacheId, string $url): \stdClass
+            {
+                $this->fetchCachedCalled = true;
+
+                return (object) [
+                    'authorization_endpoint' => 'http://imaginary-server.test/auth',
+                ];
+            }
+
+            public function createNonce(string $email): string
+            {
+                $this->createNonceCalled = true;
+
+                return 'foobar';
+            }
+
+            public function consumeNonce(string $nonce, string $email): void
+            {
+                throw new \Exception('Not implemented');
+            }
+        };
+
+        $client = new Client\Client($store, 'https://imaginary-client.test/callback');
 
         $this->assertEquals(
-            $client->authenticate('johndoe@example.com'),
+            $client->authenticate('johndoe@example.com', 'dummy state'),
             'http://imaginary-server.test/auth?'.http_build_query([
                 'login_hint' => 'johndoe@example.com',
                 'scope' => 'openid email',
@@ -63,8 +73,12 @@ class ClientTest extends \PHPUnit\Framework\TestCase
                 'response_mode' => 'form_post',
                 'client_id' => 'https://imaginary-client.test',
                 'redirect_uri' => 'https://imaginary-client.test/callback',
+                'state' => 'dummy state',
             ])
         );
+
+        $this->assertTrue($store->fetchCachedCalled);
+        $this->assertTrue($store->createNonceCalled);
     }
 
     public function testVerify()
