@@ -97,7 +97,7 @@ class Client
      * Start authentication of an email address.
      *
      * @param string $email email address to authenticate
-     * @param string $state state to carry along, will be returned in `verify`
+     * @param string $state arbitrary state that is returned to the redirect URL via the `state` query parmmeter
      *
      * @return string URL to redirect the browser to
      */
@@ -129,8 +129,10 @@ class Client
      * Verify a token received on our `redirect_uri`.
      *
      * @param string $token the received `id_token` parameter value
+     *
+     * @return string the verified email address
      */
-    public function verify(string $token): VerifyResult
+    public function verify(string $token): string
     {
         assert(!empty($token));
         assert(!empty($this->broker));
@@ -213,7 +215,7 @@ class Client
         }
 
         // Return the normalized email.
-        return new VerifyResult($email, $state);
+        return $email;
     }
 
     /**

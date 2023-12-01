@@ -33,8 +33,8 @@ while (($line = fgets($stdin, 4096)) !== false) {
             break;
         case 'verify':
             try {
-                $result = $client->verify($cmd[1]);
-                echo "ok\t{$result->email}\t{$result->state}\n";
+                $email = $client->verify($cmd[1]);
+                echo "ok\t{$email}\n";
             } catch (Throwable $err) {
                 $msg = implode('  ', explode("\n", $err->getMessage()));
                 echo "err\t{$msg}\n";
