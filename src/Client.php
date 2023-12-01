@@ -97,11 +97,10 @@ class Client
      * Start authentication of an email address.
      *
      * @param string $email email address to authenticate
-     * @param string $state state to carry along, will be returned in `verify`
      *
      * @return string URL to redirect the browser to
      */
-    public function authenticate(string $email, string $state = null): string
+    public function authenticate(string $email): string
     {
         $authEndpoint = $this->fetchDiscovery()->authorization_endpoint ?? null;
         if (!is_string($authEndpoint)) {
@@ -109,7 +108,7 @@ class Client
         }
 
         $nonce = $this->store->createNonce($email);
-        $query = [
+        $query = http_build_query([
             'login_hint' => $email,
             'scope' => 'openid email',
             'nonce' => $nonce,
@@ -117,20 +116,19 @@ class Client
             'response_mode' => 'form_post',
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUri,
-        ];
-        if (null !== $state) {
-            $query['state'] = $state;
-        }
+        ]);
 
-        return $authEndpoint.'?'.http_build_query($query);
+        return $authEndpoint.'?'.$query;
     }
 
     /**
      * Verify a token received on our `redirect_uri`.
      *
      * @param string $token the received `id_token` parameter value
+     *
+     * @return string the verified email address
      */
-    public function verify(string $token): VerifyResult
+    public function verify(string $token): string
     {
         assert(!empty($token));
         assert(!empty($this->broker));
@@ -213,7 +211,7 @@ class Client
         }
 
         // Return the normalized email.
-        return new VerifyResult($email, $state);
+        return $email;
     }
 
     /**
