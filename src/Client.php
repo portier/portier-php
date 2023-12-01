@@ -97,10 +97,11 @@ class Client
      * Start authentication of an email address.
      *
      * @param string $email email address to authenticate
+     * @param string $state arbitrary state that is returned to the redirect URL via the `state` query parmmeter
      *
      * @return string URL to redirect the browser to
      */
-    public function authenticate(string $email): string
+    public function authenticate(string $email, string $state = null): string
     {
         $authEndpoint = $this->fetchDiscovery()->authorization_endpoint ?? null;
         if (!is_string($authEndpoint)) {
@@ -108,7 +109,7 @@ class Client
         }
 
         $nonce = $this->store->createNonce($email);
-        $query = http_build_query([
+        $query = [
             'login_hint' => $email,
             'scope' => 'openid email',
             'nonce' => $nonce,
@@ -116,9 +117,12 @@ class Client
             'response_mode' => 'form_post',
             'client_id' => $this->clientId,
             'redirect_uri' => $this->redirectUri,
-        ]);
+        ];
+        if (null !== $state) {
+            $query['state'] = $state;
+        }
 
-        return $authEndpoint.'?'.$query;
+        return $authEndpoint.'?'.http_build_query($query);
     }
 
     /**
