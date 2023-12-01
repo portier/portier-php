@@ -50,7 +50,7 @@ $app->post('/auth', function($req, $res) use ($portier) {
 });
 
 $app->post('/verify', function($req, $res) use ($portier) {
-    $result = $portier->verify($req->getParsedBody()['id_token']);
+    $email = $portier->verify($req->getParsedBody()['id_token']);
 
     $res = $res
         ->withStatus(200)
@@ -58,7 +58,7 @@ $app->post('/verify', function($req, $res) use ($portier) {
 
     $res->getBody()->write(
 <<<EOF
-        <p>Verified email address {$result->email}!</p>
+        <p>Verified email address ${email}!</p>
 EOF
     );
 
