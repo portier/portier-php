@@ -101,7 +101,7 @@ class Client
      *
      * @return string URL to redirect the browser to
      */
-    public function authenticate(string $email, string $state = null): string
+    public function authenticate(string $email, ?string $state = null): string
     {
         $authEndpoint = $this->fetchDiscovery()->authorization_endpoint ?? null;
         if (!is_string($authEndpoint)) {
