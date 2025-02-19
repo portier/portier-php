@@ -233,21 +233,21 @@ class Client
      */
     private static function parseJwk(\stdClass $jwk): JwtSigner\Key
     {
-        $n = gmp_init(bin2hex(self::decodeBase64Url($jwk->n)), 16);
-        $e = gmp_init(bin2hex(self::decodeBase64Url($jwk->e)), 16);
+        $n = DER::encodeValue(DER::ID_INTEGER, self::decodeBase64Url($jwk->n));
+        $e = DER::encodeValue(DER::ID_INTEGER, self::decodeBase64Url($jwk->e));
+        $body = DER::encodeSequence($n, $e);
 
-        $seq = new \FG\ASN1\Universal\Sequence();
-        $seq->addChild(new \FG\ASN1\Universal\Integer(gmp_strval($n)));
-        $seq->addChild(new \FG\ASN1\Universal\Integer(gmp_strval($e)));
-        $pkey = new \FG\X509\PublicKey(bin2hex($seq->getBinary()));
+        $oid = DER::encodeOid(42, 840, 113549, 1, 1, 1); // RSA
+        $header = DER::encodeSequence($oid, DER::NULL);
+        $body = DER::encodeBitString($body);
+        $key = DER::encodeSequence($header, $body);
 
-        $encoded = base64_encode($pkey->getBinary());
-
-        return JwtSigner\Key\InMemory::plainText(
+        $pem =
             "-----BEGIN PUBLIC KEY-----\n".
-            chunk_split($encoded, 64, "\n").
-            "-----END PUBLIC KEY-----\n"
-        );
+            chunk_split(base64_encode($key), 64, "\n").
+            "-----END PUBLIC KEY-----\n";
+
+        return JwtSigner\Key\InMemory::plainText($pem);
     }
 
     /**
