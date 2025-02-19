@@ -1,7 +1,0 @@
-parameters:
-	ignoreErrors:
-		-
-			message: "#^Cannot call method del\\(\\) on string\\|false\\.$#"
-			count: 1
-			path: src/RedisStore.php
-

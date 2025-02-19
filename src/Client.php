@@ -166,7 +166,8 @@ class Client
             if ($key instanceof \stdClass
                     && isset($key->alg) && 'RS256' === $key->alg
                     && isset($key->kid) && $key->kid === $kid
-                    && isset($key->n) && isset($key->e)) {
+                    && isset($key->n) && is_string($key->n)
+                    && isset($key->e) && is_string($key->e)) {
                 $publicKey = self::parseJwk($key);
                 break;
             }
@@ -233,6 +234,7 @@ class Client
      */
     private static function parseJwk(\stdClass $jwk): JwtSigner\Key
     {
+        assert(is_string($jwk->n) && is_string($jwk->e));
         $n = DER::encodeValue(DER::ID_INTEGER, self::decodeBase64Url($jwk->n));
         $e = DER::encodeValue(DER::ID_INTEGER, self::decodeBase64Url($jwk->e));
         $body = DER::encodeSequence($n, $e);
