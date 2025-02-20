@@ -11,6 +11,7 @@ final class DER
 
     public const ID_INTEGER = 2;
     public const ID_BIT_STRING = 3;
+    public const ID_OCTET_STRING = 4;
     public const ID_OBJECT_ID = 6;
     public const ID_SEQUENCE = 16 | self::BIT_ID_CONSTRUCTED;
 
@@ -27,6 +28,7 @@ final class DER
      */
     public static function encodeValue(int $id, string $content): string
     {
+        // Assumption: we don't need long form.
         $prefix = chr($id);
 
         $len = strlen($content);
