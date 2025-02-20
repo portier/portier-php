@@ -161,20 +161,23 @@ class Client
         }
 
         // Find the matching public key, and verify the signature.
-        $publicKey = null;
+        $publicKey = '';
         foreach ($keysDoc->keys as $key) {
             if ($key instanceof \stdClass
-                    && isset($key->alg) && 'RS256' === $key->alg
-                    && isset($key->kid) && $key->kid === $kid
-                    && isset($key->n) && is_string($key->n)
-                    && isset($key->e) && is_string($key->e)) {
-                $publicKey = self::parseJwk($key);
+                && isset($key->alg) && 'RS256' === $key->alg
+                && isset($key->kid) && $key->kid === $kid
+            ) {
+                try {
+                    $publicKey = JWK::toPem($key);
+                } catch (\Exception) {
+                }
                 break;
             }
         }
-        if (null === $publicKey) {
+        if ('' === $publicKey) {
             throw new \Exception('Cannot find the public key used to sign the token');
         }
+        $publicKey = JwtSigner\Key\InMemory::plainText($publicKey);
 
         // Validate the token claims.
         $clock = \Lcobucci\Clock\SystemClock::fromUTC();
@@ -230,29 +233,6 @@ class Client
     }
 
     /**
-     * Parse a JWK into a PEM public key.
-     */
-    private static function parseJwk(\stdClass $jwk): JwtSigner\Key
-    {
-        assert(is_string($jwk->n) && is_string($jwk->e));
-        $n = DER::encodeValue(DER::ID_INTEGER, self::decodeBase64Url($jwk->n));
-        $e = DER::encodeValue(DER::ID_INTEGER, self::decodeBase64Url($jwk->e));
-        $body = DER::encodeSequence($n, $e);
-
-        $oid = DER::encodeOid(42, 840, 113549, 1, 1, 1); // RSA
-        $header = DER::encodeSequence($oid, DER::NULL);
-        $body = DER::encodeBitString($body);
-        $key = DER::encodeSequence($header, $body);
-
-        $pem =
-            "-----BEGIN PUBLIC KEY-----\n".
-            chunk_split(base64_encode($key), 64, "\n").
-            "-----END PUBLIC KEY-----\n";
-
-        return JwtSigner\Key\InMemory::plainText($pem);
-    }
-
-    /**
      * Get the origin for a URL.
      */
     private static function getOrigin(string $url): string
@@ -282,15 +262,5 @@ class Client
         }
 
         return $res;
-    }
-
-    private static function decodeBase64Url(string $input): string
-    {
-        $output = base64_decode(strtr($input, '-_', '+/'), true);
-        if (false === $output) {
-            throw new \Exception('Invalid base64');
-        }
-
-        return $output;
     }
 }

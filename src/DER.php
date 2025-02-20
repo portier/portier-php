@@ -42,7 +42,9 @@ final class DER
         return $prefix.$content;
     }
 
-    /** Encode an integer to base128. */
+    /**
+     * Encode an integer to base128.
+     */
     public static function encodeBase128(int $num): string
     {
         $result = chr($num & 0x7F);
@@ -76,6 +78,9 @@ final class DER
         return self::encodeValue(self::ID_OBJECT_ID, $bin);
     }
 
+    /**
+     * Encode some data as a bit string.
+     */
     public static function encodeBitString(string $data): string
     {
         return self::encodeValue(self::ID_BIT_STRING, "\0".$data);
