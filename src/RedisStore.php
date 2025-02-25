@@ -45,24 +45,41 @@ class RedisStore extends AbstractStore
         return $res->data;
     }
 
-    public function createNonce(string $email): string
+    public function createNonce(string $clientId, string $email): string
     {
         $nonce = $this->generateNonce($email);
 
         $key = 'nonce:'.$nonce;
-        $this->redis->setex($key, (int) $this->nonceTtl, $email);
+        $value = (object) ['clientId' => $clientId, 'email' => $email];
+        $value = json_encode($value, flags: JSON_THROW_ON_ERROR);
+        $this->redis->setex($key, (int) $this->nonceTtl, $value);
 
         return $nonce;
     }
 
-    public function consumeNonce(string $nonce, string $email): void
+    public function consumeNonce(string $nonce, string $clientId, string $email): void
     {
         $key = 'nonce:'.$nonce;
         $this->redis->multi();
         $this->redis->get($key);
         $this->redis->del($key);
-        $res = $this->redis->exec();
-        if ($res[0] !== $email) {
+        [$value] = $this->redis->exec();
+        assert(is_string($value));
+
+        // Handle old record that didn't include client ID.
+        if (!str_starts_with($value, '{')) {
+            if ($value !== $email) {
+                throw new \Exception('Invalid or expired nonce');
+            }
+
+            return;
+        }
+
+        $value = json_decode($value, flags: JSON_THROW_ON_ERROR);
+        if (!($value instanceof \stdClass)
+            || ($value->email ?? null) !== $email
+            || ($value->clientId ?? null) !== $clientId
+        ) {
             throw new \Exception('Invalid or expired nonce');
         }
     }

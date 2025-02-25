@@ -9,10 +9,8 @@ if (2 !== count($argv)) {
 
 require_once __DIR__.'/vendor/autoload.php';
 
-$client = new \Portier\Client\Client(
-    new \Portier\Client\MemoryStore(),
-    'http://imaginary-client.test/fake-verify-route'
-);
+$store = new Portier\Client\MemoryStore();
+$client = new Portier\Client\Client($store, 'http://imaginary-client.test/fake-verify-route');
 $client->broker = $argv[1];
 
 $stdin = fopen('php://stdin', 'r');
@@ -39,6 +37,10 @@ while (($line = fgets($stdin, 4096)) !== false) {
                 $msg = implode('  ', explode("\n", $err->getMessage()));
                 echo "err\t{$msg}\n";
             }
+            break;
+        case 'clear-cache':
+            $store->clearCache();
+            echo "ok\n";
             break;
         default:
             error_log("invalid command: {$cmd[0]}");

@@ -24,7 +24,7 @@ class Client
 
     private StoreInterface $store;
     private string $redirectUri;
-    private string $clientId;
+    private string $clientOrigin;
 
     /**
      * The origin of the Portier broker.
@@ -51,7 +51,7 @@ class Client
         $this->store = $store;
         $this->redirectUri = $redirectUri;
 
-        $this->clientId = self::getOrigin($this->redirectUri);
+        $this->clientOrigin = self::getOrigin($this->redirectUri);
     }
 
     /**
@@ -103,19 +103,43 @@ class Client
      */
     public function authenticate(string $email, ?string $state = null): string
     {
-        $authEndpoint = $this->fetchDiscovery()->authorization_endpoint ?? null;
+        $discovery = $this->fetchDiscovery();
+
+        $authEndpoint = $discovery->config->authorization_endpoint ?? null;
         if (!is_string($authEndpoint)) {
             throw new \Exception('No authorization_endpoint in discovery document');
         }
 
-        $nonce = $this->store->createNonce($email);
+        // Prefer Ed25519. Note that `alg=EdDSA` could also mean Ed448,
+        // so we must also inspect the key set.
+        $clientId = $this->clientOrigin;
+        $supportedAlgs = $discovery->config->id_token_signing_alg_values_supported ?? null;
+        if (is_array($supportedAlgs) && in_array('EdDSA', $supportedAlgs)) {
+            $foundEd25519 = false;
+            $foundOtherEdDSA = false;
+            foreach ($discovery->jwks as $jwk) {
+                if (($jwk->use ?? null) === 'sig' && ($jwk->alg ?? null) === 'EdDSA') {
+                    if (($jwk->crv ?? null) === 'Ed25519') {
+                        $foundEd25519 = true;
+                    } else {
+                        $foundOtherEdDSA = true;
+                        break;
+                    }
+                }
+            }
+            if ($foundEd25519 && !$foundOtherEdDSA) {
+                $clientId .= '?id_token_signed_response_alg=EdDSA';
+            }
+        }
+
+        $nonce = $this->store->createNonce($clientId, $email);
         $query = [
             'login_hint' => $email,
             'scope' => 'openid email',
             'nonce' => $nonce,
             'response_type' => 'id_token',
             'response_mode' => 'form_post',
-            'client_id' => $this->clientId,
+            'client_id' => $clientId,
             'redirect_uri' => $this->redirectUri,
         ];
         if (null !== $state) {
@@ -136,7 +160,6 @@ class Client
     {
         assert(!empty($token));
         assert(!empty($this->broker));
-        assert(!empty($this->clientId));
 
         // Parse the token.
         $parser = new Parser(new JoseEncoder());
@@ -149,43 +172,56 @@ class Client
             throw new \Exception('Token has no "kid" header field');
         }
 
-        // Fetch broker keys.
-        $jwksUri = $this->fetchDiscovery()->jwks_uri ?? null;
-        if (!is_string($jwksUri)) {
-            throw new \Exception('No jwks_uri in discovery document');
-        }
-
-        $keysDoc = $this->store->fetchCached('keys', $jwksUri);
-        if (!isset($keysDoc->keys) || !is_array($keysDoc->keys)) {
-            throw new \Exception('Keys document incorrectly formatted');
-        }
-
         // Find the matching public key, and verify the signature.
-        $publicKey = '';
-        foreach ($keysDoc->keys as $key) {
-            if ($key instanceof \stdClass
-                && isset($key->alg) && 'RS256' === $key->alg
-                && isset($key->kid) && $key->kid === $kid
-            ) {
-                try {
-                    $publicKey = JWK::toPem($key);
-                } catch (\Exception) {
-                }
+        $matchingJwk = null;
+        foreach ($this->fetchDiscovery()->jwks as $jwk) {
+            if (($jwk->use ?? null) === 'sig' && ($jwk->kid ?? null) === $kid) {
+                $matchingJwk = $jwk;
                 break;
             }
         }
-        if ('' === $publicKey) {
-            throw new \Exception('Cannot find the public key used to sign the token');
+        if (null === $matchingJwk) {
+            throw new \Exception('Cannot find the JWK used to sign the token');
         }
-        $publicKey = JwtSigner\Key\InMemory::plainText($publicKey);
+
+        $alg = $matchingJwk->alg ?? null;
+        if (!is_string($alg)) {
+            throw new \Exception('Missing "alg" on JWK');
+        }
+        switch ($alg) {
+            case 'RS256':
+                $key = JWK::toPem($matchingJwk);
+                $signer = new JwtSigner\Rsa\Sha256();
+                break;
+
+            case 'EdDSA':
+                $crv = $matchingJwk->crv ?? null;
+                $x = $matchingJwk->x ?? null;
+                if (!is_string($crv) || !is_string($x)) {
+                    throw new \Exception('Incomplete EdDSA JWK');
+                }
+                if ('Ed25519' !== $crv) {
+                    throw new \Exception('Unsupported EdDSA crv: '.substr($crv, 0, 10));
+                }
+
+                $key = JWK::decodeBase64Url($x);
+                $signer = new JwtSigner\Eddsa();
+                break;
+
+            default:
+                throw new \Exception('Unsupported kty: '.substr($alg, 0, 10));
+        }
+        if (empty($key)) {
+            throw new \Exception('Invalid JWK');
+        }
+        $key = JwtSigner\Key\InMemory::plainText($key);
 
         // Validate the token claims.
         $clock = \Lcobucci\Clock\SystemClock::fromUTC();
         $leeway = new \DateInterval('PT'.$this->leeway.'S');
         $validator = new Validator();
-        $validator->assert($token, new JwtConstraint\SignedWith(new JwtSigner\Rsa\Sha256(), $publicKey));
+        $validator->assert($token, new JwtConstraint\SignedWith($signer, $key));
         $validator->assert($token, new JwtConstraint\IssuedBy($this->broker));
-        $validator->assert($token, new JwtConstraint\PermittedFor($this->clientId));
         $validator->assert($token, new JwtConstraint\LooseValidAt($clock, $leeway));
 
         // Check that the required token claims are set.
@@ -198,10 +234,14 @@ class Client
         }
 
         $nonce = $claims->get('nonce');
+        $aud = $claims->get('aud');
         $email = $claims->get('email');
         $emailOriginal = $claims->get('email_original', $email);
         if (!is_string($nonce)) {
             throw new \Exception(sprintf('Token claim "nonce" is not a string'));
+        }
+        if (!is_array($aud) || 1 !== count($aud) || !is_string($aud[0])) {
+            throw new \Exception(sprintf('Token claim "aud" is not a string'));
         }
         if (!is_string($email)) {
             throw new \Exception(sprintf('Token claim "email" is not a string'));
@@ -211,11 +251,19 @@ class Client
         }
 
         // Consume the nonce.
-        $this->store->consumeNonce($nonce, $emailOriginal);
+        $clientId = $aud[0];
+        $this->store->consumeNonce($nonce, $clientId, $emailOriginal);
 
-        $state = $claims->get('state');
-        if (!is_string($state)) {
-            $state = null;
+        // Verify the correct signing algorithm was used.
+        $expectedAlg = 'RS256';
+        $sepIdx = strpos($clientId, '?');
+        if (false !== $sepIdx) {
+            $params = [];
+            parse_str(substr($clientId, $sepIdx + 1), $params);
+            $expectedAlg = $params['id_token_signed_response_alg'] ?? 'RS256';
+        }
+        if ($alg !== $expectedAlg) {
+            throw new \Exception(sprintf('Token signed using incorrect algorithm'));
         }
 
         // Return the normalized email.
@@ -223,13 +271,37 @@ class Client
     }
 
     /**
-     * Fetches the OpenID discovery document from the broker.
+     * Fetches the OpenID configuration and keys from the broker.
+     *
+     * @return object{config: \stdClass, jwks: \stdClass[]}
      */
-    private function fetchDiscovery(): \stdClass
+    private function fetchDiscovery(): object
     {
-        $discoveryUrl = $this->broker.'/.well-known/openid-configuration';
+        $configUrl = $this->broker.'/.well-known/openid-configuration';
+        $config = $this->store->fetchCached('config', $configUrl);
 
-        return $this->store->fetchCached('discovery', $discoveryUrl);
+        $jwksUri = $config->jwks_uri ?? null;
+        if (!is_string($jwksUri)) {
+            throw new \Exception('No jwks_uri in openid-configuration');
+        }
+
+        $jwksDoc = $this->store->fetchCached('keys', $jwksUri);
+        $jwks = $jwksDoc->keys ?? null;
+        if (!is_array($jwks)) {
+            throw new \Exception('JWKs document incorrectly formatted');
+        }
+        foreach ($jwks as $jwk) {
+            if (!($jwk instanceof \stdClass)) {
+                throw new \Exception('JWKs document incorrectly formatted');
+            }
+        }
+        /** @var \stdClass[] */
+        $jwks = $jwks;
+
+        return (object) [
+            'config' => $config,
+            'jwks' => $jwks,
+        ];
     }
 
     /**
