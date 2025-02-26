@@ -10,9 +10,9 @@ namespace Portier\Client;
  */
 class MemoryStore extends AbstractStore
 {
-    /** @var \stdClass[] */
+    /** @var array<string, object{data: \stdClass, expires: int}> */
     private $cache;
-    /** @var \stdClass[] */
+    /** @var array<string, object{email: string, expires: int}> */
     private $nonces;
 
     /**

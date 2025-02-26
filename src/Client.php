@@ -68,7 +68,7 @@ class Client
         assert(defined('MB_CASE_FOLD') && function_exists('idn_to_ascii'));
 
         $localEnd = strrpos($email, '@');
-        if (false === $localEnd) {
+        if (false === $localEnd || $localEnd + 1 === strlen($email)) {
             return '';
         }
 
@@ -101,7 +101,7 @@ class Client
      *
      * @return string URL to redirect the browser to
      */
-    public function authenticate(string $email, string $state = null): string
+    public function authenticate(string $email, ?string $state = null): string
     {
         $authEndpoint = $this->fetchDiscovery()->authorization_endpoint ?? null;
         if (!is_string($authEndpoint)) {
@@ -161,19 +161,23 @@ class Client
         }
 
         // Find the matching public key, and verify the signature.
-        $publicKey = null;
+        $publicKey = '';
         foreach ($keysDoc->keys as $key) {
             if ($key instanceof \stdClass
-                    && isset($key->alg) && 'RS256' === $key->alg
-                    && isset($key->kid) && $key->kid === $kid
-                    && isset($key->n) && isset($key->e)) {
-                $publicKey = self::parseJwk($key);
+                && isset($key->alg) && 'RS256' === $key->alg
+                && isset($key->kid) && $key->kid === $kid
+            ) {
+                try {
+                    $publicKey = JWK::toPem($key);
+                } catch (\Exception) {
+                }
                 break;
             }
         }
-        if (null === $publicKey) {
+        if ('' === $publicKey) {
             throw new \Exception('Cannot find the public key used to sign the token');
         }
+        $publicKey = JwtSigner\Key\InMemory::plainText($publicKey);
 
         // Validate the token claims.
         $clock = \Lcobucci\Clock\SystemClock::fromUTC();
@@ -229,28 +233,6 @@ class Client
     }
 
     /**
-     * Parse a JWK into a PEM public key.
-     */
-    private static function parseJwk(\stdClass $jwk): JwtSigner\Key
-    {
-        $n = gmp_init(bin2hex(self::decodeBase64Url($jwk->n)), 16);
-        $e = gmp_init(bin2hex(self::decodeBase64Url($jwk->e)), 16);
-
-        $seq = new \FG\ASN1\Universal\Sequence();
-        $seq->addChild(new \FG\ASN1\Universal\Integer(gmp_strval($n)));
-        $seq->addChild(new \FG\ASN1\Universal\Integer(gmp_strval($e)));
-        $pkey = new \FG\X509\PublicKey(bin2hex($seq->getBinary()));
-
-        $encoded = base64_encode($pkey->getBinary());
-
-        return JwtSigner\Key\InMemory::plainText(
-            "-----BEGIN PUBLIC KEY-----\n".
-            chunk_split($encoded, 64, "\n").
-            "-----END PUBLIC KEY-----\n"
-        );
-    }
-
-    /**
      * Get the origin for a URL.
      */
     private static function getOrigin(string $url): string
@@ -280,15 +262,5 @@ class Client
         }
 
         return $res;
-    }
-
-    private static function decodeBase64Url(string $input): string
-    {
-        $output = base64_decode(strtr($input, '-_', '+/'), true);
-        if (false === $output) {
-            throw new \Exception('Invalid base64');
-        }
-
-        return $output;
     }
 }

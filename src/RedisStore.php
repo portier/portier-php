@@ -26,7 +26,7 @@ class RedisStore extends AbstractStore
         $key = 'cache:'.$cacheId;
 
         $data = $this->redis->get($key);
-        if ($data) {
+        if (is_string($data) && $data) {
             $data = json_decode($data);
             assert($data instanceof \stdClass);
 
@@ -58,10 +58,10 @@ class RedisStore extends AbstractStore
     public function consumeNonce(string $nonce, string $email): void
     {
         $key = 'nonce:'.$nonce;
-        $res = $this->redis->multi()
-            ->get($key)
-            ->del($key)
-            ->exec();
+        $this->redis->multi();
+        $this->redis->get($key);
+        $this->redis->del($key);
+        $res = $this->redis->exec();
         if ($res[0] !== $email) {
             throw new \Exception('Invalid or expired nonce');
         }

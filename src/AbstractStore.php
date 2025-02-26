@@ -19,14 +19,14 @@ abstract class AbstractStore implements StoreInterface
     /**
      * Lifespan of a nonce.
      *
-     * @var float
+     * @var int
      */
     public $nonceTtl = 15 * 60;
 
     /**
      * Minimum time to cache a HTTP response.
      *
-     * @var float
+     * @var int
      */
     public $cacheMinTtl = 60 * 60;
 
@@ -57,9 +57,9 @@ abstract class AbstractStore implements StoreInterface
      *
      * @param string $url the URL to fetch
      *
-     * @return \stdClass an object with `ttl` and `data` properties
+     * @return object{data: \stdClass, ttl: int}
      */
-    public function fetch(string $url): \stdClass
+    public function fetch(string $url): object
     {
         $res = $this->guzzle->get($url);
 

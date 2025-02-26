@@ -35,7 +35,7 @@ class ClientTest extends \PHPUnit\Framework\TestCase
 
     public function testAuthenticate()
     {
-        $store = new class() implements Client\StoreInterface {
+        $store = new class implements Client\StoreInterface {
             public bool $fetchCachedCalled = false;
             public bool $createNonceCalled = false;
 
