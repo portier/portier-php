@@ -68,7 +68,7 @@ class Client
         assert(defined('MB_CASE_FOLD') && function_exists('idn_to_ascii'));
 
         $localEnd = strrpos($email, '@');
-        if (false === $localEnd) {
+        if (false === $localEnd || $localEnd + 1 === strlen($email)) {
             return '';
         }
 
