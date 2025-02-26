@@ -12,7 +12,7 @@ class MemoryStore extends AbstractStore
 {
     /** @var array<string, object{data: \stdClass, expires: int}> */
     private $cache;
-    /** @var array<string, object{email: string, expires: int}> */
+    /** @var array<string, object{clientId: string, email: string, expires: int}> */
     private $nonces;
 
     /**
@@ -24,6 +24,14 @@ class MemoryStore extends AbstractStore
 
         $this->cache = [];
         $this->nonces = [];
+    }
+
+    /**
+     * @internal for testing only
+     */
+    public function clearCache(): void
+    {
+        $this->cache = [];
     }
 
     public function fetchCached(string $cacheId, string $url): \stdClass
@@ -43,11 +51,12 @@ class MemoryStore extends AbstractStore
         return $res->data;
     }
 
-    public function createNonce(string $email): string
+    public function createNonce(string $clientId, string $email): string
     {
         $nonce = $this->generateNonce($email);
 
         $this->nonces[$nonce] = (object) [
+            'clientId' => $clientId,
             'email' => $email,
             'expires' => time() + (int) $this->nonceTtl,
         ];
@@ -55,13 +64,16 @@ class MemoryStore extends AbstractStore
         return $nonce;
     }
 
-    public function consumeNonce(string $nonce, string $email): void
+    public function consumeNonce(string $nonce, string $clientId, string $email): void
     {
         $item = $this->nonces[$nonce] ?? null;
         if (null !== $item) {
             unset($this->nonces[$nonce]);
 
-            if ($item->email === $email && time() < $item->expires) {
+            if ($item->clientId === $clientId
+                && $item->email === $email
+                && time() < $item->expires
+            ) {
                 return;
             }
         }

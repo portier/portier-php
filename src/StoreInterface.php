@@ -20,17 +20,19 @@ interface StoreInterface
     /**
      * Generate and store a nonce.
      *
-     * @param string $email email address to associate with the nonce
+     * @param string $clientId client ID to associate with the nonce
+     * @param string $email    email address to associate with the nonce
      *
      * @return string the generated nonce
      */
-    public function createNonce(string $email): string;
+    public function createNonce(string $clientId, string $email): string;
 
     /**
-     * Consume a nonce, and check if it's valid for the given email address.
+     * Consume a nonce, and check if it's valid for the given client ID and email address.
      *
-     * @param string $nonce the nonce to resolve
-     * @param string $email the email address that is being verified
+     * @param string $nonce    the nonce to resolve
+     * @param string $clientId client ID that is being verified
+     * @param string $email    the email address that is being verified
      */
-    public function consumeNonce(string $nonce, string $email): void;
+    public function consumeNonce(string $nonce, string $clientId, string $email): void;
 }

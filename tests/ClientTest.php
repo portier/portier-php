@@ -43,19 +43,29 @@ class ClientTest extends \PHPUnit\Framework\TestCase
             {
                 $this->fetchCachedCalled = true;
 
-                return (object) [
-                    'authorization_endpoint' => 'http://imaginary-server.test/auth',
-                ];
+                switch (parse_url($url, PHP_URL_PATH)) {
+                    case '/.well-known/openid-configuration':
+                        return (object) [
+                            'authorization_endpoint' => 'http://imaginary-server.test/auth',
+                            'jwks_uri' => 'http://imaginary-server.test/jwks',
+                        ];
+                    case '/jwks':
+                        return (object) [
+                            'keys' => [],
+                        ];
+                    default:
+                        throw new \Exception('Unexpected request: '.$url);
+                }
             }
 
-            public function createNonce(string $email): string
+            public function createNonce(string $clientId, string $email): string
             {
                 $this->createNonceCalled = true;
 
                 return 'foobar';
             }
 
-            public function consumeNonce(string $nonce, string $email): void
+            public function consumeNonce(string $nonce, string $clientId, string $email): void
             {
                 throw new \Exception('Not implemented');
             }

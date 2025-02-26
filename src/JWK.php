@@ -11,6 +11,9 @@ final class JWK
     {
     }
 
+    /**
+     * Convert a JWK to PEM format.
+     */
     public static function toPem(\stdClass $jwk): string
     {
         if (!isset($jwk->kty) || !is_string($jwk->kty)) {
@@ -136,7 +139,7 @@ final class JWK
     }
 
     /**
-     * @internal for tests only
+     * Decode base64url.
      */
     public static function decodeBase64Url(string $input): string
     {
